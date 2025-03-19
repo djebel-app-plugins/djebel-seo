@@ -18,7 +18,7 @@ license: gpl2
 */
 
 $obj = new Djebel_SEO();
-Dj_CMS_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderMetaData', ] );
+Dj_App_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderMetaData', ] );
 
 class Djebel_SEO
 {
