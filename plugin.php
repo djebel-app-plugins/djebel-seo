@@ -9,7 +9,7 @@ tags: seo, meta, tags
 stable_version: 1.0.0
 min_php_ver: 5.6
 min_dj_cms_ver: 1.0.0
-tested_with_dj_cms_ver: 1.0.0
+tested_with_dj_app_ver: 1.0.0
 author_name: Svetoslav Marinov (Slavi)
 company_name: Orbisius
 author_uri: https://orbisius.com
