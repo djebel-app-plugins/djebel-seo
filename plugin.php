@@ -29,6 +29,7 @@ class Djebel_SEO
 
         $segments = $req_obj->segments();
 
+        // home page?
         if (empty($segments)) {
             $meta_title = $options_obj->get('meta.default.title');
             $meta_description = $options_obj->get('meta.default.description');
