@@ -30,9 +30,9 @@ class Djebel_SEO
         $segments = $req_obj->segments();
 
         if (empty($segments)) {
-            $meta_title = $options_obj->get('meta.title');
-            $meta_description = $options_obj->get('meta.description');
-            $meta_keywords = $options_obj->get('meta.keywords');
+            $meta_title = $options_obj->get('meta.default.title');
+            $meta_description = $options_obj->get('meta.default.description');
+            $meta_keywords = $options_obj->get('meta.default.keywords');
         } else {
             // loop through the segments and start with the last one that's the current page.
             // if it has seo meta data then use it otherwise use the parent page
