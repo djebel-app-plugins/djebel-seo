@@ -30,7 +30,7 @@ class Djebel_SEO
         $segments = $req_obj->segments();
 
         if (empty($segments)) {
-            $meta_title = $options_obj->get('meta.meta_title');
+            $meta_title = $options_obj->get('meta.title');
             $meta_description = $options_obj->get('meta.description');
             $meta_keywords = $options_obj->get('meta.keywords');
         } else {
