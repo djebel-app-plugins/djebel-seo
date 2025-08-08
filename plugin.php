@@ -60,10 +60,12 @@ class Djebel_SEO
         }
 
         if (!empty($meta_description)) {
+            $page_obj->meta_description = $meta_description;
             echo "<meta name='description' content='$meta_description' />\n";
         }
 
         if (!empty($meta_keywords)) {
+            $page_obj->meta_keywords = $meta_keywords;
             echo "<meta name='keywords' content='$meta_keywords' />\n";
         }
     }
