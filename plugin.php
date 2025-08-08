@@ -51,8 +51,11 @@ class Djebel_SEO
             }
         }
 
+        $page_obj = Dj_App_Page::getInstance();
+
         // @todo replace it Dj_App_Util::replaceTagContent('title', 'New Title', $buff);
         if (!empty($meta_title)) {
+            $page_obj->meta_title = $meta_title;
             echo "<meta name='title' content='$meta_title' />\n";
         }
 
