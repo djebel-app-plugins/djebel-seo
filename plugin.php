@@ -18,11 +18,25 @@ license: gpl2
 */
 
 $obj = new Djebel_SEO();
-Dj_App_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderMetaData', ] );
+Dj_App_Hooks::addAction( 'app.core.init', [ $obj, 'prepareMetaData' ] );
+Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'maybeRemoveDuplicate' ], 50 );
+
+//Dj_App_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderMetaData' ] );
 
 class Djebel_SEO
 {
-    public function renderMetaData()
+    public function maybeRemoveDuplicate($content)
+    {
+        $page_obj = Dj_App_Page::getInstance();
+
+        if (!empty($page_obj->meta_title)) {
+            $content = Dj_App_Util::replaceTagContent('title', $page_obj->meta_title, $content);
+        }
+
+        return $content;
+    }
+
+    public function prepareMetaData()
     {
         $req_obj = Dj_App_Request::getInstance();
         $options_obj = Dj_App_Options::getInstance();
@@ -56,17 +70,17 @@ class Djebel_SEO
         // @todo replace it Dj_App_Util::replaceTagContent('title', 'New Title', $buff);
         if (!empty($meta_title)) {
             $page_obj->meta_title = $meta_title;
-            echo "<meta name='title' content='$meta_title' />\n";
+//            echo "<meta name='title' content='$meta_title' />\n";
         }
 
         if (!empty($meta_description)) {
             $page_obj->meta_description = $meta_description;
-            echo "<meta name='description' content='$meta_description' />\n";
+//            echo "<meta name='description' content='$meta_description' />\n";
         }
 
         if (!empty($meta_keywords)) {
             $page_obj->meta_keywords = $meta_keywords;
-            echo "<meta name='keywords' content='$meta_keywords' />\n";
+//            echo "<meta name='keywords' content='$meta_keywords' />\n";
         }
     }
 }
