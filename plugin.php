@@ -21,8 +21,6 @@ $obj = new Djebel_SEO();
 Dj_App_Hooks::addAction( 'app.core.init', [ $obj, 'prepareMetaData' ] );
 Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'updateMeta' ], 50 );
 
-//Dj_App_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderMetaData' ] );
-
 class Djebel_SEO
 {
     public function updateMeta($content)
