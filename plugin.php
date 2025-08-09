@@ -39,10 +39,18 @@ class Djebel_SEO
         $ctx['content'] = $content;
         $fields = Dj_App_Hooks::applyFilter( 'app.plugins.seo.meta_fields', $fields, $ctx );
 
+        // handle title tag differently as it contains text between <title>...</title>
+        if (isset($fields['title'])) {
+            $content = Dj_App_Util::replaceTagContent('title', $fields['title'], $content);
+            unset($fields['title']); // remove it so we don't have to check in each loop iteration
+        }
+
         foreach ($fields as $field => $val) {
-            if (!empty($val)) {
-                $content = Dj_App_Util::replaceMetaTagContent($field, $val, $content);
+            if (empty($val)) {
+                continue;
             }
+
+            $content = Dj_App_Util::replaceMetaTagContent($field, $val, $content);
         }
 
         return $content;
