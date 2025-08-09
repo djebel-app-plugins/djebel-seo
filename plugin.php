@@ -19,18 +19,30 @@ license: gpl2
 
 $obj = new Djebel_SEO();
 Dj_App_Hooks::addAction( 'app.core.init', [ $obj, 'prepareMetaData' ] );
-Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'maybeRemoveDuplicate' ], 50 );
+Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'updateMeta' ], 50 );
 
 //Dj_App_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderMetaData' ] );
 
 class Djebel_SEO
 {
-    public function maybeRemoveDuplicate($content)
+    public function updateMeta($content)
     {
         $page_obj = Dj_App_Page::getInstance();
 
-        if (!empty($page_obj->meta_title)) {
-            $content = Dj_App_Util::replaceTagContent('title', $page_obj->meta_title, $content);
+        $fields = [
+            'title' => $page_obj->meta_title,
+            'description' => $page_obj->meta_description,
+            'keywords' => $page_obj->meta_keywords,
+        ];
+
+        $ctx = [];
+        $ctx['content'] = $content;
+        $fields = Dj_App_Hooks::applyFilter( 'app.plugins.seo.meta_fields', $fields, $ctx );
+
+        foreach ($fields as $field => $val) {
+            if (!empty($val)) {
+                $content = Dj_App_Util::replaceMetaTagContent($field, $val, $content);
+            }
         }
 
         return $content;
@@ -67,20 +79,16 @@ class Djebel_SEO
 
         $page_obj = Dj_App_Page::getInstance();
 
-        // @todo replace it Dj_App_Util::replaceTagContent('title', 'New Title', $buff);
         if (!empty($meta_title)) {
             $page_obj->meta_title = $meta_title;
-//            echo "<meta name='title' content='$meta_title' />\n";
         }
 
         if (!empty($meta_description)) {
             $page_obj->meta_description = $meta_description;
-//            echo "<meta name='description' content='$meta_description' />\n";
         }
 
         if (!empty($meta_keywords)) {
             $page_obj->meta_keywords = $meta_keywords;
-//            echo "<meta name='keywords' content='$meta_keywords' />\n";
         }
     }
 }
