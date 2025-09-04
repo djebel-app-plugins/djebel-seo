@@ -26,11 +26,12 @@ class Djebel_SEO
     public function updateMeta($content)
     {
         $page_obj = Dj_App_Page::getInstance();
+        $options_obj = Dj_App_Options::getInstance();
 
         $fields = [
-            'title' => $page_obj->meta_title,
-            'description' => $page_obj->meta_description,
-            'keywords' => $page_obj->meta_keywords,
+            'title' => $options_obj->meta->default->title,
+            'keywords' => $options_obj->meta->default->keywords,
+            'description' => $options_obj->meta->default->description,
         ];
 
         $ctx = [];
