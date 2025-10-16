@@ -18,31 +18,24 @@ license: gpl2
 */
 
 $obj = Djebel_Plugin_SEO::getInstance();
-Dj_App_Hooks::addAction( 'app.core.init', [ $obj, 'prepareMetaData' ] );
 Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'updateMeta' ], 50 );
 
 class Djebel_Plugin_SEO
 {
-    /**
-     * Decides what meta info to use for the page early on.
-     * @return void
-     * @throws Exception
-     */
-    public function prepareMetaData()
+    public function updateMeta($content)
     {
+        // Prepare meta data from all sources
         $req_obj = Dj_App_Request::getInstance();
         $options_obj = Dj_App_Options::getInstance();
-
         $segments = $req_obj->segments();
 
-        // home page?
+        // Start with config-based meta (home or segment-based)
         if (empty($segments)) {
             $meta_title = $options_obj->get('meta.home.title');
             $meta_description = $options_obj->get('meta.home.description');
             $meta_keywords = $options_obj->get('meta.home.keywords');
         } else {
-            // loop through the segments and start with the last one that's the current page.
-            // if it has seo meta data then use it otherwise use the parent page
+            // Loop through segments and use the first one with meta data
             $reverse_segments = array_reverse($segments);
 
             foreach ($reverse_segments as $segment) {
@@ -57,58 +50,47 @@ class Djebel_Plugin_SEO
             }
         }
 
-        $page_obj = Dj_App_Page::getInstance();
-        $options_obj = Dj_App_Options::getInstance();
-
-        // Read page data once from static content plugin
+        // Override with plugin-provided data (from static content plugin, etc)
         $page_data = Dj_App_Util::data('djebel_page_data');
 
-        // Check each field individually
-        if (empty($meta_title) && !empty($page_data['meta_title'])) {
+        if (!empty($page_data['meta_title'])) {
             $meta_title = $page_data['meta_title'];
         }
 
-        if (empty($meta_keywords) && !empty($page_data['meta_keywords'])) {
+        if (!empty($page_data['meta_keywords'])) {
             $meta_keywords = $page_data['meta_keywords'];
         }
 
-        if (empty($meta_description) && !empty($page_data['meta_description'])) {
+        if (!empty($page_data['meta_description'])) {
             $meta_description = $page_data['meta_description'];
         }
 
+        // Apply defaults if still empty
         $meta_title = empty($meta_title) ? $options_obj->meta->default->title : $meta_title;
         $meta_description = empty($meta_description) ? $options_obj->meta->default->description : $meta_description;
         $meta_keywords = empty($meta_keywords) ? $options_obj->meta->default->keywords : $meta_keywords;
 
-        $page_obj->meta_title = $meta_title;
-        $page_obj->meta_description = $meta_description;
-        $page_obj->meta_keywords = $meta_keywords;
-    }
-
-    public function updateMeta($content)
-    {
-        $page_obj = Dj_App_Page::getInstance();
-
+        // Build fields array for replacement
         $fields = [
-            'title' => $page_obj->meta_title,
-            'keywords' => $page_obj->meta_keywords,
-            'description' => $page_obj->meta_description,
+            'title' => $meta_title,
+            'keywords' => $meta_keywords,
+            'description' => $meta_description,
         ];
 
-        $ctx = [];
-        $ctx['content'] = $content;
-        $fields = Dj_App_Hooks::applyFilter( 'app.plugins.seo.meta_fields', $fields, $ctx );
+        $ctx = ['content' => $content];
+        $fields = Dj_App_Hooks::applyFilter('app.plugin.seo.meta_fields', $fields, $ctx);
 
         if (empty($fields)) {
             return $content;
         }
 
-        // handle title tag differently as it contains text between <title>...</title>
+        // Replace title tag
         if (isset($fields['title'])) {
             $content = Dj_App_Util::replaceTagContent('title', $fields['title'], $content);
-            unset($fields['title']); // remove it so we don't have to check in each loop iteration
+            unset($fields['title']);
         }
 
+        // Replace meta tags
         foreach ($fields as $field => $val) {
             if (empty($val)) {
                 continue;
