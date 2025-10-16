@@ -17,11 +17,11 @@ text_domain: djebel-seo
 license: gpl2
 */
 
-$obj = new Djebel_SEO();
+$obj = Djebel_Plugin_SEO::getInstance();
 Dj_App_Hooks::addAction( 'app.core.init', [ $obj, 'prepareMetaData' ] );
 Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'updateMeta' ], 50 );
 
-class Djebel_SEO
+class Djebel_Plugin_SEO
 {
     /**
      * Decides what meta info to use for the page early on.
@@ -118,5 +118,22 @@ class Djebel_SEO
         }
 
         return $content;
+    }
+
+    /**
+     * Singleton pattern i.e. we have only one instance of this obj
+     * @staticvar static $instance
+     * @return static
+     */
+    public static function getInstance() {
+        static $instance = null;
+
+        // This will make the calling class to be instantiated.
+        // no need each sub class to define this method.
+        if (is_null($instance)) {
+            $instance = new static();
+        }
+
+        return $instance;
     }
 }
