@@ -60,6 +60,22 @@ class Djebel_SEO
         $page_obj = Dj_App_Page::getInstance();
         $options_obj = Dj_App_Options::getInstance();
 
+        // Read page data once from static content plugin
+        $page_data = Dj_App_Util::data('djebel_page_data');
+
+        // Check each field individually
+        if (empty($meta_title) && !empty($page_data['meta_title'])) {
+            $meta_title = $page_data['meta_title'];
+        }
+
+        if (empty($meta_description) && !empty($page_data['meta_description'])) {
+            $meta_description = $page_data['meta_description'];
+        }
+
+        if (empty($meta_keywords) && !empty($page_data['meta_keywords'])) {
+            $meta_keywords = $page_data['meta_keywords'];
+        }
+
         $meta_title = empty($meta_title) ? $options_obj->meta->default->title : $meta_title;
         $meta_description = empty($meta_description) ? $options_obj->meta->default->description : $meta_description;
         $meta_keywords = empty($meta_keywords) ? $options_obj->meta->default->keywords : $meta_keywords;
