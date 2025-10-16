@@ -68,12 +68,12 @@ class Djebel_Plugin_SEO
             $meta_title = $page_data['meta_title'];
         }
 
-        if (empty($meta_description) && !empty($page_data['meta_description'])) {
-            $meta_description = $page_data['meta_description'];
-        }
-
         if (empty($meta_keywords) && !empty($page_data['meta_keywords'])) {
             $meta_keywords = $page_data['meta_keywords'];
+        }
+
+        if (empty($meta_description) && !empty($page_data['meta_description'])) {
+            $meta_description = $page_data['meta_description'];
         }
 
         $meta_title = empty($meta_title) ? $options_obj->meta->default->title : $meta_title;
