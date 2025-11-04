@@ -66,9 +66,17 @@ class Djebel_Plugin_SEO
         }
 
         // Apply defaults if still empty
-        $meta_title = empty($meta_title) ? $options_obj->meta->default->title : $meta_title;
-        $meta_description = empty($meta_description) ? $options_obj->meta->default->description : $meta_description;
-        $meta_keywords = empty($meta_keywords) ? $options_obj->meta->default->keywords : $meta_keywords;
+        if (empty($meta_title)) {
+            $meta_title = $options_obj->get('meta.default.title');
+        }
+
+        if (empty($meta_description)) {
+            $meta_description = $options_obj->get('meta.default.description');
+        }
+
+        if (empty($meta_keywords)) {
+            $meta_keywords = $options_obj->get('meta.default.keywords');
+        }
 
         // Build fields array for replacement
         $fields = [
