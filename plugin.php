@@ -20,6 +20,9 @@ license: gpl2
 $obj = Djebel_Plugin_SEO::getInstance();
 Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'updateMeta' ], 50 );
 
+// The plugin's own formatting rides the same filter as everybody else's — unhook it and it's off.
+Dj_App_Hooks::addFilter( 'app.plugin.seo.meta_fields', [ $obj, 'formatMetaFields' ] );
+
 class Djebel_Plugin_SEO
 {
     public function updateMeta($content)
@@ -108,6 +111,99 @@ class Djebel_Plugin_SEO
         }
 
         return $content;
+    }
+
+    /**
+     * Listener on app.plugin.seo.meta_fields — formats fields ONLY when the
+     * site explicitly configures a format in app.ini; nothing is assumed.
+     * Format keys live in [meta] next to the values they format, resolving
+     * page-specific first then the default — same chain as the meta values:
+     *   home:  meta.home.title_format -> meta.default.title_format
+     *   inner: meta.<page>.title_format -> meta.default.title_format
+     * Description etc. can join later.
+     * @param array $fields title/keywords/description
+     * @param array $ctx
+     * @return array
+     */
+    public function formatMetaFields($fields, $ctx = [])
+    {
+        if (empty($fields['title'])) {
+            return $fields;
+        }
+
+        // Current page slug (deepest segment); empty on the home page.
+        $page_obj = Dj_App_Page::getInstance();
+        $page_link = $page_obj->get('page');
+
+        // Fallback keys resolve the whole chain in ONE lookup: page-specific
+        // format wins, the default is the fallback, nothing configured -> no formatting.
+        if (empty($page_link)) {
+            $format_key = 'meta.home.title_format,meta.default.title_format';
+        } else {
+            $format_key = "meta.{$page_link}.title_format,meta.default.title_format";
+        }
+
+        $options_obj = Dj_App_Options::getInstance();
+        $format = $options_obj->get($format_key);
+
+        if (empty($format)) {
+            return $fields;
+        }
+
+        $fields['title'] = $this->formatMetaTitle($fields['title'], $format);
+
+        return $fields;
+    }
+
+    /**
+     * Formats a meta title through the given format string.
+     * Merge tags: %title%, %site_title%. Returns the title unchanged when the
+     * format is empty, when the title already contains the site title (avoids
+     * duplication), or when the formatted result comes out empty.
+     * @param string $meta_title
+     * @param string $format e.g. "%title% | %site_title%"
+     * @return string
+     */
+    public function formatMetaTitle($meta_title, $format)
+    {
+        $meta_title = Dj_App_String_Util::trim($meta_title);
+
+        if (empty($meta_title)) {
+            return $meta_title;
+        }
+
+        $format = Dj_App_String_Util::trim($format);
+
+        if (empty($format)) {
+            return $meta_title;
+        }
+
+        $site_title = '';
+
+        if (strpos($format, '%site_title%') !== false) {
+            $options_obj = Dj_App_Options::getInstance();
+            $site_title = $options_obj->get('site.site_title,site_title');
+            $site_title = Dj_App_String_Util::trim($site_title);
+
+            // The title already carries the site title -> formatting would duplicate it.
+            if (!empty($site_title) && (stripos($meta_title, $site_title) !== false)) {
+                return $meta_title;
+            }
+        }
+
+        $replace = [
+            '%title%' => $meta_title,
+            '%site_title%' => $site_title,
+        ];
+
+        $formatted_title = Dj_App_String_Util::replaceMergeTags($format, $replace);
+        $formatted_title = Dj_App_String_Util::trim($formatted_title);
+
+        if (empty($formatted_title)) {
+            return $meta_title;
+        }
+
+        return $formatted_title;
     }
 
     /**
