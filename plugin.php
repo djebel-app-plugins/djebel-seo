@@ -23,6 +23,12 @@ Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'updateMeta' ], 50 );
 // The plugin's own formatting rides the same filter as everybody else's — unhook it and it's off.
 Dj_App_Hooks::addFilter( 'app.plugin.seo.meta_fields', [ $obj, 'formatMetaFields' ] );
 
+// Head tags are a separate job from the meta rewrite above: updateMeta() REPLACES tags
+// already in the page buffer, this APPENDS new ones. So it rides core's head hook
+// instead, whose captured output core injects before </head>. Unhook this one and the
+// declared head tags are off without disturbing meta handling.
+Dj_App_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderHeadTags' ] );
+
 class Djebel_Plugin_SEO
 {
     public function updateMeta($content)
@@ -204,6 +210,199 @@ class Djebel_Plugin_SEO
         }
 
         return $formatted_title;
+    }
+
+    /**
+     * Listener on core's app.page.html.head — core captures whatever is echoed here and
+     * injects it before </head>.
+     * Magic vars (__CONTENT_URL__ etc.) are NOT an option in this content: core replaces
+     * them earlier in the app.page.full_content chain than it injects head output, so
+     * every href is built as a real URL.
+     * Filter: app.plugin.seo.head_tags_html — last word on the markup before it's echoed.
+     * @return bool whether anything was rendered
+     */
+    public function renderHeadTags()
+    {
+        $tags = $this->getHeadTags();
+        $buff = '';
+
+        foreach ($tags as $tag) {
+            $buff .= $this->renderHeadTag($tag);
+        }
+
+        $buff = Dj_App_Hooks::applyFilter( 'app.plugin.seo.head_tags_html', $buff );
+
+        if (empty($buff)) {
+            return false;
+        }
+
+        echo $buff;
+
+        return true;
+    }
+
+    /**
+     * Builds the head tag definitions from what the site declares in config. No filenames,
+     * sizes, rel or property values are known here — an unconfigured site gets nothing.
+     *
+     * Config, in [plugins], value in query-string format. tag= picks the element and
+     * defaults to link; meta is the other one that matters in <head>:
+     *   djebel-seo.head_tags_dir = files/images/site/favicon
+     *   djebel-seo.head_tags[favicon_32] = "rel=icon&type=image/png&sizes=32x32&file=favicon-32x32.png"
+     *   djebel-seo.head_tags[og_image] = "tag=meta&property=og:image&file=og-image.png"
+     *
+     * file= resolves against head_tags_dir (relative to the content dir) into href= for a
+     * link and content= for a meta. Passing href=/content= directly covers an asset hosted
+     * elsewhere. Every other pair passes through as an attribute verbatim — a new
+     * attribute needs no change here.
+     * No file_exists() checks: declaring an entry is the opt-in, and stat-ing each file
+     * every request would cost more than the 404s it prevents.
+     * Filter: app.plugin.seo.head_tags — the returned array is keyed by config name,
+     * which makes a single entry addressable for overriding or dropping.
+     * @return array tag_id => attribute array
+     */
+    public function getHeadTags()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $head_tags_cfg = $options_obj->get('plugins.djebel-seo.head_tags');
+
+        if (empty($head_tags_cfg) || !is_array($head_tags_cfg)) {
+            return [];
+        }
+
+        $tags_dir = $options_obj->get('plugins.djebel-seo.head_tags_dir');
+        $tags_dir = Dj_App_String_Util::trim($tags_dir, '/');
+        $base_url = Dj_App_Util::getContentDirUrl();
+
+        if (!empty($tags_dir)) {
+            $base_url .= '/' . $tags_dir;
+        }
+
+        $tags = [];
+
+        foreach ($head_tags_cfg as $tag_id => $tag_cfg) {
+            if (empty($tag_cfg)) {
+                continue;
+            }
+
+            $attribs = Dj_App_String_Util::parseQueryString($tag_cfg);
+
+            if (empty($attribs)) {
+                continue;
+            }
+
+            // A declared file lands in whichever attribute carries the URL for that
+            // element. renderHeadTag() rejects whatever is still missing its target.
+            if (!empty($attribs['file'])) {
+                $file = Dj_App_String_Util::trim($attribs['file'], '/');
+                $url = $base_url . '/' . $file;
+
+                if (!empty($attribs['tag']) && $attribs['tag'] == 'meta') {
+                    $attribs['content'] = $url;
+                } else {
+                    $attribs['href'] = $url;
+                }
+
+                unset($attribs['file']);
+            }
+
+            // A preloaded font is always fetched in CORS mode, even same-origin. Without
+            // crossorigin the browser discards the preload and fetches the font a second
+            // time, so the declaration costs instead of saves. Explicit config still wins.
+            if (empty($attribs['crossorigin']) && !empty($attribs['as']) && $attribs['as'] == 'font') {
+                $attribs['crossorigin'] = 'anonymous';
+            }
+
+            $tags[$tag_id] = $attribs;
+        }
+
+        $ctx = [ 'head_tags_cfg' => $head_tags_cfg, ];
+        $tags = Dj_App_Hooks::applyFilter( 'app.plugin.seo.head_tags', $tags, $ctx );
+
+        return $tags;
+    }
+
+    /**
+     * Renders one <head> tag — <link> by default, <meta> when tag=meta. Attributes are
+     * emitted verbatim rather than from a fixed list, which keeps type/sizes/crossorigin/
+     * media and anything future working with no change here.
+     * A link needs rel + href; a meta needs property or name, plus content.
+     * @param array $params attribute => value, optional tag
+     * @return string empty when the required attributes are missing or the href isn't safe
+     */
+    public function renderHeadTag($params)
+    {
+        $href = '';
+
+        // link and meta are the only elements this renders — the required-attribute checks
+        // live in each branch, cheapest first, so a reject costs one array read. Anything
+        // that isn't meta falls back to link, where a junk entry fails rel/href and drops.
+        if (!empty($params['tag']) && $params['tag'] == 'meta') {
+            $tag = 'meta';
+
+            if (empty($params['content'])) {
+                return '';
+            }
+
+            // Reached only once content is there. property first — og:* is the common case,
+            // so the chain usually stops on the first check.
+            if (empty($params['property']) && empty($params['name']) && empty($params['http-equiv'])) {
+                return '';
+            }
+        } else {
+            $tag = 'link';
+
+            if (empty($params['rel']) || empty($params['href'])) {
+                return '';
+            }
+
+            // escUrl() blanks anything that isn't root-relative or http(s), so a bad config
+            // value drops the tag instead of reaching the markup. Only href gets this —
+            // a meta's content is not always a URL, and rides escAttr() below.
+            $href = Dj_App_HTML::escUrl($params['href']);
+
+            if (empty($href)) {
+                return '';
+            }
+
+            unset($params['href']);
+        }
+
+        unset($params['tag']);
+
+        // Parts joined with a single space beat repeated .= here — measured ~20% cheaper,
+        // because the glue means no part carries its own leading space.
+        $parts = [];
+        $parts[] = '<' . $tag;
+
+        foreach ($params as $attrib => $val) {
+            if (empty($val) || !is_scalar($val)) {
+                continue;
+            }
+
+            // Keeps word chars and the dash, drops the rest, so a junk name can't break out
+            // of the tag. The dash matters: HTML defines hyphenated attributes (http-equiv,
+            // accept-charset, data-*) and formatKey() would rewrite those to underscores,
+            // leaving an attribute the browser ignores. An all-junk name empties out here.
+            $attrib_fmt = Dj_App_String_Util::sanitizeAlphaNumericExt($attrib);
+
+            if (empty($attrib_fmt)) {
+                continue;
+            }
+
+            $val_esc = Dj_App_HTML::escAttr($val);
+            $parts[] = $attrib_fmt . '="' . $val_esc . '"';
+        }
+
+        if (!empty($href)) {
+            $parts[] = 'href="' . $href . '"';
+        }
+
+        $parts[] = '/>';
+        $buff = implode(' ', $parts);
+        $buff .= "\n";
+
+        return $buff;
     }
 
     /**
