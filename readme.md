@@ -33,14 +33,16 @@ default.title = fsite.net
 default.keywords = static site hosting, wordpress hosting
 default.description = Static Site Hosting and WordPress Hosting.
 
-; Optional: title format — set it and titles get formatted; omit it and they don't
-default.title_format = %title% | %site_title%
+; Optional formats — set one and that field gets formatted; omit it and it doesn't.
+; Any field works: title, description, keywords.
+default.title_format = {title} | {site_title}
+default.description_format = {description} — {site_title}
 
 ; Home page
 home.title = Static Site Hosting and WordPress Hosting
 home.keywords = static site hosting, wordpress hosting, managed hosting
 home.description = Hosting with careful onboarding and safe defaults.
-home.title_format = %site_title% | %title%
+home.title_format = {site_title} | {title}
 
 ; Any other page, keyed by its URL slug (deepest segment)
 hosting.title = Hosting
@@ -48,22 +50,36 @@ hosting.keywords = hosting plans, managed hosting
 hosting.description = Hosting plans built for performance.
 ```
 
-## Title formatting
+## Meta formatting
 
 Formatting runs ONLY when a format is configured — no config, no formatting,
-no cost (one option lookup and out).
+no cost (one option lookup per field and out). It applies to EVERY meta field
+the same way — `title`, `description`, `keywords`, and anything a filter added —
+so the site suffix is written once instead of on every page's title.
 
-- Key resolution, page-specific first: `<page>.title_format` →
-  `default.title_format`. The home page checks `home.title_format` →
-  `default.title_format`.
-- Merge tags: `%title%` (the resolved meta title) and `%site_title%`
-  (`[site] site_title`).
-- If the title already contains the site title, formatting is skipped —
-  no `fsite.net | fsite.net` duplication.
-- An empty formatted result falls back to the plain title.
+- Key resolution, page-specific first: `<page>.<field>_format` →
+  `default.<field>_format`. The home page checks `home.<field>_format` →
+  `default.<field>_format`.
+- Merge tags:
+  - `{<field>}` — one per meta field: `{title}`, `{description}`, `{keywords}`.
+    Built from the raw values BEFORE any formatting, so a format never depends
+    on which field was formatted first, and any field can reference another.
+  - One per `[site]` config key, under its own name — `{site_title}`, `{lang}`,
+    and so on. Adding a `[site]` key makes a new tag available with no code
+    change. A meta field of the same name wins (`{description}` in a meta format
+    means the meta description, not the site's).
+- If the value already contains the site title, a format that appends
+  `{site_title}` is skipped — no `fsite.net | fsite.net` duplication. This is why
+  a description that already names the site won't get the suffix.
+- An empty formatted result falls back to the unformatted value.
 
-`formatMetaTitle($meta_title, $format)` is a public, pure formatter — themes
-or site plugins can call it directly.
+Tag substitution itself is `Dj_App_Util::replaceTags()` — the framework's one
+placeholder replacer — so `{tag}`, `%%tag%%` and `%tag%` all work in a format.
+
+Extending this is a filter, not a method call: the whole pass is one listener on
+`app.plugin.seo.meta_fields`, so a theme or site plugin changes the fields there
+(or removes the listener to turn formatting off entirely). `formatMetaValue()` is
+public and pure, but the filter is the contract.
 
 ## Head tags — `<link>` and `<meta>`
 

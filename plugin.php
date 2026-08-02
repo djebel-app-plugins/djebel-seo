@@ -122,94 +122,99 @@ class Djebel_Plugin_SEO
     /**
      * Listener on app.plugin.seo.meta_fields — formats fields ONLY when the
      * site explicitly configures a format in app.ini; nothing is assumed.
-     * Format keys live in [meta] next to the values they format, resolving
-     * page-specific first then the default — same chain as the meta values:
-     *   home:  meta.home.title_format -> meta.default.title_format
-     *   inner: meta.<page>.title_format -> meta.default.title_format
-     * Description etc. can join later.
+     * Every field is treated the same: title, description, keywords, and anything a
+     * filter added. Each looks up its own format key, page-specific first then the
+     * default — the same chain as the meta values:
+     *   home:  meta.home.<field>_format -> meta.default.<field>_format
+     *   inner: meta.<page>.<field>_format -> meta.default.<field>_format
+     * A field with no format configured is left untouched.
      * @param array $fields title/keywords/description
      * @param array $ctx
      * @return array
      */
     public function formatMetaFields($fields, $ctx = [])
     {
-        if (empty($fields['title'])) {
+        if (empty($fields)) {
             return $fields;
         }
+
+        $options_obj = Dj_App_Options::getInstance();
+
+        // Every [site] key is a tag under its own config name ({site_title}, {lang}, ...),
+        // so adding one is config alone. Merged BEFORE any formatting runs, so a format
+        // interpolates raw values and never depends on which field formatted first; the
+        // fields win a name clash, which is what a meta format means by {description}.
+        $site_opt_obj = $options_obj->getSection('site');
+        $site_data = $site_opt_obj->toArray();
+        $tags = array_merge($site_data, $fields);
 
         // Current page slug (deepest segment); empty on the home page.
         $page_obj = Dj_App_Page::getInstance();
         $page_link = $page_obj->get('page');
+        $format_page = empty($page_link) ? 'home' : $page_link;
 
-        // Fallback keys resolve the whole chain in ONE lookup: page-specific
-        // format wins, the default is the fallback, nothing configured -> no formatting.
-        if (empty($page_link)) {
-            $format_key = 'meta.home.title_format,meta.default.title_format';
-        } else {
-            $format_key = "meta.{$page_link}.title_format,meta.default.title_format";
+        foreach ($fields as $field => $val) {
+            if (empty($val)) {
+                continue;
+            }
+
+            // Fallback keys resolve the whole chain in ONE lookup: page-specific
+            // format wins, the default is the fallback, nothing configured -> no formatting.
+            $format_key = "meta.{$format_page}.{$field}_format,meta.default.{$field}_format";
+            $format = $options_obj->get($format_key);
+
+            if (empty($format)) {
+                continue;
+            }
+
+            $fields[$field] = $this->formatMetaValue($val, $format, $tags);
         }
-
-        $options_obj = Dj_App_Options::getInstance();
-        $format = $options_obj->get($format_key);
-
-        if (empty($format)) {
-            return $fields;
-        }
-
-        $fields['title'] = $this->formatMetaTitle($fields['title'], $format);
 
         return $fields;
     }
 
     /**
-     * Formats a meta title through the given format string.
-     * Merge tags: %title%, %site_title%. Returns the title unchanged when the
-     * format is empty, when the title already contains the site title (avoids
-     * duplication), or when the formatted result comes out empty.
-     * @param string $meta_title
-     * @param string $format e.g. "%title% | %site_title%"
+     * Formats one meta value — title, description, keywords, any of them — through the
+     * given format string, interpolating the supplied tags.
+     * Returns the value unchanged when the format is empty, when the value already
+     * carries the site title (appending it would duplicate it), or when the formatted
+     * result comes out empty.
+     * @param string $value
+     * @param string $format e.g. "{title} | {site_title}"
+     * @param array $tags Bare tag name => value
      * @return string
      */
-    public function formatMetaTitle($meta_title, $format)
+    public function formatMetaValue($value, $format, $tags = [])
     {
-        $meta_title = Dj_App_String_Util::trim($meta_title);
+        $value = Dj_App_String_Util::trim($value);
 
-        if (empty($meta_title)) {
-            return $meta_title;
+        if (empty($value)) {
+            return $value;
         }
 
         $format = Dj_App_String_Util::trim($format);
 
         if (empty($format)) {
-            return $meta_title;
+            return $value;
         }
 
-        $site_title = '';
+        $site_title = empty($tags['site_title']) ? '' : $tags['site_title'];
 
-        if (strpos($format, '%site_title%') !== false) {
-            $options_obj = Dj_App_Options::getInstance();
-            $site_title = $options_obj->get('site.site_title,site_title');
-            $site_title = Dj_App_String_Util::trim($site_title);
-
-            // The title already carries the site title -> formatting would duplicate it.
-            if (!empty($site_title) && (stripos($meta_title, $site_title) !== false)) {
-                return $meta_title;
-            }
+        // A value that already names the site skips a format that would append the site
+        // title again. The format has to be checked too, or "About oterm" would also skip
+        // a format that never mentions the site title.
+        if (Dj_App_String_Util::contains($format, 'site_title') && Dj_App_String_Util::contains($value, $site_title)) {
+            return $value;
         }
 
-        $replace = [
-            '%title%' => $meta_title,
-            '%site_title%' => $site_title,
-        ];
+        $formatted_value = Dj_App_Util::replaceTags($format, $tags);
+        $formatted_value = Dj_App_String_Util::trim($formatted_value);
 
-        $formatted_title = Dj_App_String_Util::replaceMergeTags($format, $replace);
-        $formatted_title = Dj_App_String_Util::trim($formatted_title);
-
-        if (empty($formatted_title)) {
-            return $meta_title;
+        if (empty($formatted_value)) {
+            return $value;
         }
 
-        return $formatted_title;
+        return $formatted_value;
     }
 
     /**
