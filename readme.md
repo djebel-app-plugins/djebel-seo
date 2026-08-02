@@ -170,6 +170,20 @@ replaces magic vars earlier in the `app.page.full_content` chain than it
 injects head output, so a placeholder would ship raw to the browser. Use
 `file=` (resolved for you) or a full `href=`.
 
+The three steps are separate methods, so you can take over at whichever level
+suits — same principle as the meta side, where the filter is the contract and
+the methods are public but incidental:
+
+| Method | Does |
+|---|---|
+| `getHeadTags()` | Turns the declared config into tag definitions, keyed by their config name (`favicon_ico`, `og_image`, …), and applies `app.plugin.seo.head_tags`. Returns an empty array when the site declares no `head_tags`. |
+| `renderHeadTag($params)` | Renders ONE definition to markup — `<link>` by default, `<meta>` on `tag=meta`. Returns an empty string when the required attributes are missing or the `href` isn't safe. |
+| `renderHeadTags()` | The listener core calls: renders every definition, applies `app.plugin.seo.head_tags_html`, echoes it. |
+
+Because `getHeadTags()` keys its return by config name, a filter can address one
+entry — override a single favicon, drop `og_image` on a page — without rebuilding
+the set.
+
 ## Filters
 
 | Filter | Purpose |
