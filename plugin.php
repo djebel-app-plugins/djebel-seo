@@ -35,17 +35,24 @@ Dj_App_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderHeadTags' ] );
 
 class Djebel_Plugin_SEO
 {
-    // Only these may be declared by a content file. The display 'title' is deliberately
-    // NOT one of them: it names the page for humans, while the meta title is written for
-    // search results, and letting the former silently become the latter would overwrite a
-    // configured meta title with a nav label.
+    // Only these may be declared by a content file and OVERRIDE the configured values. The
+    // display 'title' is deliberately NOT one of them: it names the page for humans, while
+    // the meta title is written for search results, and letting the former silently become
+    // the latter would overwrite a configured meta title with a nav label.
     const CONTENT_META_FIELDS = [ 'meta_title', 'meta_keywords', 'meta_description', ];
 
     private $content_meta = [];
 
+    // The display title the content file carried, kept OUT of $content_meta on purpose:
+    // that array overrides configuration, and this must never do that. It is consulted
+    // only once nothing else produced a meta title, just above the configured default —
+    // so a page with no meta.<slug>.title gets a real title instead of the generic one.
+    private $content_title = '';
+
     /**
      * Listener on app.page.content — keeps the meta_* keys a content file declared in its
-     * own front matter, which updateMeta() then prefers over the configured values.
+     * own front matter, which updateMeta() then prefers over the configured values, plus
+     * the display title it carried, which updateMeta() uses only as a last resort.
      * Returns the content untouched; it only reads.
      * @param string $content
      * @param array $ctx carries the parsed front matter under 'meta'
@@ -65,7 +72,21 @@ class Djebel_Plugin_SEO
             $this->content_meta[$field] = $ctx['meta'][$field];
         }
 
+        if (!empty($ctx['meta']['title'])) {
+            $this->content_title = $ctx['meta']['title'];
+        }
+
         return $content;
+    }
+
+    /**
+     * The display title carried by the content file being rendered, if any.
+     * Empty when the page declared none.
+     * @return string
+     */
+    public function getContentTitle()
+    {
+        return $this->content_title;
     }
 
     public function updateMeta($content)
@@ -113,6 +134,13 @@ class Djebel_Plugin_SEO
 
         if (!empty($page_data['meta_description'])) {
             $meta_description = $page_data['meta_description'];
+        }
+
+        // Nothing configured or declared for this page — the title the content file itself
+        // carried beats the site-wide default, which would otherwise label every such page
+        // identically. Deliberately last: it never overrides a configured meta title.
+        if (empty($meta_title)) {
+            $meta_title = $this->getContentTitle();
         }
 
         // Apply defaults if still empty
