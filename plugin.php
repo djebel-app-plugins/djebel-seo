@@ -23,6 +23,10 @@ Dj_App_Hooks::addFilter( 'app.page.full_content', [ $obj, 'updateMeta' ], 50 );
 // The plugin's own formatting rides the same filter as everybody else's — unhook it and it's off.
 Dj_App_Hooks::addFilter( 'app.plugin.seo.meta_fields', [ $obj, 'formatMetaFields' ] );
 
+// Content carries its own front matter in the filter context; this collects the meta_*
+// keys out of it. Unhook it and a file can no longer declare its own meta.
+Dj_App_Hooks::addFilter( 'app.page.content', [ $obj, 'collectContentMeta' ] );
+
 // Head tags are a separate job from the meta rewrite above: updateMeta() REPLACES tags
 // already in the page buffer, this APPENDS new ones. So it rides core's head hook
 // instead, whose captured output core injects before </head>. Unhook this one and the
@@ -31,6 +35,39 @@ Dj_App_Hooks::addAction( 'app.page.html.head', [ $obj, 'renderHeadTags' ] );
 
 class Djebel_Plugin_SEO
 {
+    // Only these may be declared by a content file. The display 'title' is deliberately
+    // NOT one of them: it names the page for humans, while the meta title is written for
+    // search results, and letting the former silently become the latter would overwrite a
+    // configured meta title with a nav label.
+    const CONTENT_META_FIELDS = [ 'meta_title', 'meta_keywords', 'meta_description', ];
+
+    private $content_meta = [];
+
+    /**
+     * Listener on app.page.content — keeps the meta_* keys a content file declared in its
+     * own front matter, which updateMeta() then prefers over the configured values.
+     * Returns the content untouched; it only reads.
+     * @param string $content
+     * @param array $ctx carries the parsed front matter under 'meta'
+     * @return string
+     */
+    public function collectContentMeta($content, $ctx = [])
+    {
+        if (empty($ctx['meta'])) {
+            return $content;
+        }
+
+        foreach (self::CONTENT_META_FIELDS as $field) {
+            if (empty($ctx['meta'][$field])) {
+                continue;
+            }
+
+            $this->content_meta[$field] = $ctx['meta'][$field];
+        }
+
+        return $content;
+    }
+
     public function updateMeta($content)
     {
         // Prepare meta data from all sources
@@ -61,6 +98,10 @@ class Djebel_Plugin_SEO
 
         // Override with plugin-provided data (from static content plugin, etc)
         $page_data = Dj_App_Util::data('djebel_page_data');
+        $page_data = empty($page_data) ? [] : $page_data;
+
+        // What the file itself declared wins over collection-level page data.
+        $page_data = array_merge($page_data, $this->content_meta);
 
         if (!empty($page_data['meta_title'])) {
             $meta_title = $page_data['meta_title'];
